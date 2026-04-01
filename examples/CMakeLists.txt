@@ -7,7 +7,7 @@ project(cnerium_server_examples LANGUAGES CXX)
 # ========================
 function(cnerium_add_server_example target source_file)
     add_executable(${target} ${source_file})
-    target_link_libraries(${target} PRIVATE server::server)
+    target_link_libraries(${target} PRIVATE cnerium::server)
     target_compile_features(${target} PRIVATE cxx_std_20)
 
     if(MSVC)
@@ -20,8 +20,8 @@ endfunction()
 # ========================
 # Examples
 # ========================
-cnerium_add_server_example(server_example_01 01_hello_server.cpp)
-cnerium_add_server_example(server_example_02 02_routes_basic.cpp)
-cnerium_add_server_example(server_example_03 03_json_response.cpp)
-cnerium_add_server_example(server_example_04 04_middleware_pipeline.cpp)
-cnerium_add_server_example(server_example_05 05_not_found_and_errors.cpp)
+cnerium_add_server_example(cnerium_server_example_01 01_hello_server.cpp)
+cnerium_add_server_example(cnerium_server_example_02 02_routes_basic.cpp)
+cnerium_add_server_example(cnerium_server_example_03 03_json_response.cpp)
+cnerium_add_server_example(cnerium_server_example_04 04_middleware_pipeline.cpp)
+cnerium_add_server_example(cnerium_server_example_05 05_not_found_and_errors.cpp)
