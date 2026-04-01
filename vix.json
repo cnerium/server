@@ -1,0 +1,40 @@
+{
+  "name": "server",
+  "namespace": "cnerium",
+  "version": "0.1.0",
+  "type": "header-only",
+  "include": "include",
+  "license": "MIT",
+  "description": "HTTP server layer for the Cnerium web framework. Connects transport, routing, middleware, and HTTP request/response handling.",
+  "keywords": [
+    "cpp",
+    "server",
+    "http",
+    "router",
+    "middleware",
+    "framework",
+    "cnerium",
+    "vix"
+  ],
+  "repository": "https://github.com/cnerium/server",
+  "authors": [
+    {
+      "name": "Gaspard Kirira",
+      "github": "Gaspardkirira"
+    }
+  ],
+  "deps": [
+    {
+      "id": "cnerium/http",
+      "version": "0.2.0"
+    },
+    {
+      "id": "cnerium/middleware",
+      "version": "0.1.0"
+    },
+    {
+      "id": "cnerium/router",
+      "version": "0.1.0"
+    }
+  ]
+}
