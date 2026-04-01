@@ -11,8 +11,8 @@ include(GNUInstallDirs)
 # ========================
 # Options
 # ========================
-option(CNERIUM_SERVER_BUILD_TESTS "Build server tests" ON)
-option(CNERIUM_SERVER_BUILD_EXAMPLES "Build server examples" ON)
+option(CNERIUM_SERVER_BUILD_TESTS "Build server tests" OFF)
+option(CNERIUM_SERVER_BUILD_EXAMPLES "Build server examples" OFF)
 
 # ========================
 # Global settings
@@ -28,22 +28,34 @@ if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/.vix/vix_deps.cmake")
     include("${CMAKE_CURRENT_SOURCE_DIR}/.vix/vix_deps.cmake")
 endif()
 
-if(NOT TARGET cnerium::http AND NOT TARGET cnerium_http)
+if(NOT TARGET cnerium::http
+   AND NOT TARGET cnerium_http
+   AND NOT TARGET http::http
+   AND NOT TARGET http)
     find_package(cnerium_http CONFIG QUIET)
     find_package(http CONFIG QUIET)
 endif()
 
-if(NOT TARGET cnerium::middleware AND NOT TARGET cnerium_middleware)
+if(NOT TARGET cnerium::middleware
+   AND NOT TARGET cnerium_middleware
+   AND NOT TARGET middleware::middleware
+   AND NOT TARGET middleware)
     find_package(cnerium_middleware CONFIG QUIET)
     find_package(middleware CONFIG QUIET)
 endif()
 
-if(NOT TARGET cnerium::router AND NOT TARGET cnerium_router)
+if(NOT TARGET cnerium::router
+   AND NOT TARGET cnerium_router
+   AND NOT TARGET router::router
+   AND NOT TARGET router)
     find_package(cnerium_router CONFIG QUIET)
     find_package(router CONFIG QUIET)
 endif()
 
-if(NOT TARGET cnerium::json AND NOT TARGET cnerium_json)
+if(NOT TARGET cnerium::json
+   AND NOT TARGET cnerium_json
+   AND NOT TARGET json::json
+   AND NOT TARGET json)
     find_package(cnerium_json CONFIG QUIET)
     find_package(json CONFIG QUIET)
 endif()
@@ -57,24 +69,40 @@ if(TARGET cnerium::http)
     set(CNERIUM_SERVER_HTTP_TARGET cnerium::http)
 elseif(TARGET cnerium_http)
     set(CNERIUM_SERVER_HTTP_TARGET cnerium_http)
+elseif(TARGET http::http)
+    set(CNERIUM_SERVER_HTTP_TARGET http::http)
+elseif(TARGET http)
+    set(CNERIUM_SERVER_HTTP_TARGET http)
 endif()
 
 if(TARGET cnerium::middleware)
     set(CNERIUM_SERVER_MIDDLEWARE_TARGET cnerium::middleware)
 elseif(TARGET cnerium_middleware)
     set(CNERIUM_SERVER_MIDDLEWARE_TARGET cnerium_middleware)
+elseif(TARGET middleware::middleware)
+    set(CNERIUM_SERVER_MIDDLEWARE_TARGET middleware::middleware)
+elseif(TARGET middleware)
+    set(CNERIUM_SERVER_MIDDLEWARE_TARGET middleware)
 endif()
 
 if(TARGET cnerium::router)
     set(CNERIUM_SERVER_ROUTER_TARGET cnerium::router)
 elseif(TARGET cnerium_router)
     set(CNERIUM_SERVER_ROUTER_TARGET cnerium_router)
+elseif(TARGET router::router)
+    set(CNERIUM_SERVER_ROUTER_TARGET router::router)
+elseif(TARGET router)
+    set(CNERIUM_SERVER_ROUTER_TARGET router)
 endif()
 
 if(TARGET cnerium::json)
     set(CNERIUM_SERVER_JSON_TARGET cnerium::json)
 elseif(TARGET cnerium_json)
     set(CNERIUM_SERVER_JSON_TARGET cnerium_json)
+elseif(TARGET json::json)
+    set(CNERIUM_SERVER_JSON_TARGET json::json)
+elseif(TARGET json)
+    set(CNERIUM_SERVER_JSON_TARGET json)
 endif()
 
 if(CNERIUM_SERVER_HTTP_TARGET STREQUAL "")

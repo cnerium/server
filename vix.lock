@@ -1,36 +1,36 @@
 {
   "dependencies": [
     {
-      "commit": "b0ea000611ee7d41eb8c38d1c4d2ca8f2a0d25e2",
-      "hash": "f5d379db34fcbb8c1b965369632616b269c494f7a2b84e66466f1c44e45ffaa5",
+      "commit": "f091c8a38ab4b9bced41759716efae66f056f838",
+      "hash": "93ae2b22608252197063269d8fa72038d83ef9dba3e5ed5e7db2290341ba2fdb",
       "id": "cnerium/middleware",
       "repo": "https://github.com/cnerium/middleware",
-      "tag": "v0.2.0",
-      "version": "0.2.0"
-    },
-    {
-      "commit": "40270e6ae0127858a84f9905bfe037c7cf7baa05",
-      "hash": "213495b6bc272a1886d8fcff235fe0031eee9ec9d9e093a15959415aaebcd5a8",
-      "id": "cnerium/http",
-      "repo": "https://github.com/cnerium/http",
-      "tag": "v0.6.0",
-      "version": "0.6.0"
-    },
-    {
-      "commit": "ccb8b3faa3b2e4e9482f6329279279bced595429",
-      "hash": "c86fd9db64748baef922c5068e8f2a8fe1d56b4d12893a29105eb1363c72da99",
-      "id": "cnerium/json",
-      "repo": "https://github.com/cnerium/json",
       "tag": "v0.3.0",
       "version": "0.3.0"
     },
     {
-      "commit": "e4ad8fd26862d6ad0f6f893320d8270bb0e2d4ed",
-      "hash": "957801e75227004395d96f46d054ff1eed99f7f74f800f40e0f24edb02b203e7",
+      "commit": "097bd8a29bd7488273ab958e21c955ab37c056e0",
+      "hash": "5d97d08e73383d31947cff80778a7df3be00d95e3418bbfcd9161b39991ee86a",
+      "id": "cnerium/http",
+      "repo": "https://github.com/cnerium/http",
+      "tag": "v0.7.0",
+      "version": "0.7.0"
+    },
+    {
+      "commit": "c7233f7eb32e05006e0ed913e0fd6e65cf6380c2",
+      "hash": "9512e715b1b7882b9281109efc19128935f197e075764061dde36edfa772db79",
+      "id": "cnerium/json",
+      "repo": "https://github.com/cnerium/json",
+      "tag": "v0.4.0",
+      "version": "0.4.0"
+    },
+    {
+      "commit": "9036d21b9bc18a314699c8eb2f7798ba0b1d757f",
+      "hash": "19facf396559e7c50987b60f2ac0dee864445df20b87ec967ce855d8e48b8ad9",
       "id": "cnerium/router",
       "repo": "https://github.com/cnerium/router",
-      "tag": "v0.5.1",
-      "version": "0.5.1"
+      "tag": "v0.6.0",
+      "version": "0.6.0"
     }
   ],
   "lockVersion": 1

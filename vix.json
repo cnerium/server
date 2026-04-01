@@ -1,7 +1,7 @@
 {
   "name": "server",
   "namespace": "cnerium",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "type": "header-only",
   "include": "include",
   "license": "MIT",
@@ -25,16 +25,12 @@
   ],
   "deps": [
     {
-      "id": "cnerium/http",
-      "version": "0.6.0"
-    },
-    {
       "id": "cnerium/middleware",
-      "version": "0.2.0"
+      "version": "0.3.0"
     },
     {
       "id": "cnerium/router",
-      "version": "0.5.1"
+      "version": "0.6.0"
     }
   ]
 }
