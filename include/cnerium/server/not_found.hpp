@@ -2,7 +2,7 @@
  * @file not_found.hpp
  * @brief cnerium::server — Default 404 Not Found handler
  *
- * @version 0.1.0
+ * @version 0.2.0
  * @author Gaspard Kirira
  * @copyright (c) 2026 Gaspard Kirira
  * @license MIT
@@ -21,11 +21,13 @@
  *   - Safe default behavior
  *   - Easy override by users or higher-level server APIs
  *   - No dependency on transport details
+ *   - Consistent default framework response shape
  *
  * Notes:
  *   - Called after route matching fails
  *   - Does not throw
- *   - Produces a plain text response by default
+ *   - Produces a JSON response by default
+ *   - The response keeps the framework signature headers
  *
  * Usage:
  * @code
@@ -36,7 +38,7 @@
  *
  *   // Response:
  *   //   status = 404
- *   //   body   = "Not Found"
+ *   //   body   = {"ok":false,"error":"Not Found","framework":"cnerium"}
  * @endcode
  */
 
@@ -50,15 +52,17 @@ namespace cnerium::server
   /**
    * @brief Default 404 fallback handler.
    *
-   * Sets the response status to 404 Not Found and
-   * returns a simple plain text body.
+   * Sets the response status to 404 Not Found and returns
+   * a simple JSON error body consistent with the framework.
    *
    * @param ctx Server request context
    */
   inline void not_found(Context &ctx)
   {
     ctx.response().set_status(cnerium::http::Status::not_found);
-    ctx.response().text("Not Found");
+    ctx.response().json({{"ok", false},
+                         {"error", "Not Found"},
+                         {"framework", "cnerium"}});
   }
 
 } // namespace cnerium::server

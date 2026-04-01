@@ -2,7 +2,7 @@
  * @file RequestParser.hpp
  * @brief cnerium::server::detail — Raw HTTP request parser
  *
- * @version 0.1.0
+ * @version 0.2.0
  * @author Gaspard Kirira
  * @copyright (c) 2026 Gaspard Kirira
  * @license MIT
@@ -16,6 +16,7 @@
  *   - parse the request line
  *   - parse HTTP headers
  *   - extract the request path
+ *   - extract the optional query string
  *   - extract the optional request body
  *   - populate a cnerium::http::Request instance
  *
@@ -37,16 +38,17 @@
  *   - Multipart parsing is outside the scope of this parser
  *   - Body parsing is based on Content-Length when present
  *   - Raw wire parsing belongs to the server layer, not to Request itself
+ *   - Connection persistence is handled by higher layers
  *
  * Usage:
  * @code
  *   using namespace cnerium::server::detail;
  *
  *   std::string raw =
- *       "POST /users HTTP/1.1\r\n"
+ *       "POST /users?active=true HTTP/1.1\r\n"
  *       "Host: localhost\r\n"
  *       "Content-Type: application/json\r\n"
- *       "Content-Length: 17\r\n"
+ *       "Content-Length: 18\r\n"
  *       "\r\n"
  *       "{\"name\":\"Gaspard\"}";
  *
@@ -188,6 +190,11 @@ namespace cnerium::server::detail
       result.request.set_method(request_line_parse.method);
       result.request.set_path(std::move(request_line_parse.path));
 
+      if (!request_line_parse.query.empty())
+      {
+        result.request.set_query(std::move(request_line_parse.query));
+      }
+
       std::size_t declared_content_length = 0;
       bool has_content_length = false;
 
@@ -212,12 +219,12 @@ namespace cnerium::server::detail
         }
 
         result.request.set_header(
-            std::move(header_parse.key),
-            std::move(header_parse.value));
+            header_parse.key,
+            header_parse.value);
 
         if (iequals(header_parse.original_key, "Content-Length"))
         {
-          auto length = parse_content_length(header_parse.value);
+          const auto length = parse_content_length(header_parse.value);
           if (!length.has_value())
           {
             result.error = "invalid Content-Length header";
@@ -260,14 +267,22 @@ namespace cnerium::server::detail
     }
 
   private:
+    /**
+     * @brief Result of request-line parsing.
+     */
     struct RequestLineParseResult
     {
       bool ok{false};
       cnerium::http::Method method{cnerium::http::Method::Get};
       std::string path{};
+      std::string query{};
+      std::string version{};
       std::string error{};
     };
 
+    /**
+     * @brief Result of header-line parsing.
+     */
     struct HeaderLineParseResult
     {
       bool ok{false};
@@ -288,12 +303,7 @@ namespace cnerium::server::detail
         std::string_view text,
         std::size_t &pos)
     {
-      if (pos > text.size())
-      {
-        return std::nullopt;
-      }
-
-      if (pos == text.size())
+      if (pos >= text.size())
       {
         return std::nullopt;
       }
@@ -339,9 +349,9 @@ namespace cnerium::server::detail
         return result;
       }
 
-      const auto method_sv = line.substr(0, first_space);
-      const auto target_sv = line.substr(first_space + 1, second_space - first_space - 1);
-      const auto version_sv = line.substr(second_space + 1);
+      const auto method_sv = trim(line.substr(0, first_space));
+      const auto target_sv = trim(line.substr(first_space + 1, second_space - first_space - 1));
+      const auto version_sv = trim(line.substr(second_space + 1));
 
       if (target_sv.empty())
       {
@@ -362,9 +372,13 @@ namespace cnerium::server::detail
         return result;
       }
 
+      const auto [path, query] = split_target(target_sv);
+
       result.ok = true;
       result.method = *method;
-      result.path = normalize_target(target_sv);
+      result.path = normalize_path(path);
+      result.query = std::string(query);
+      result.version = std::string(version_sv);
       return result;
     }
 
@@ -389,7 +403,7 @@ namespace cnerium::server::detail
         return result;
       }
 
-      auto key = trim(line.substr(0, colon));
+      const auto key = trim(line.substr(0, colon));
       auto value = trim(line.substr(colon + 1));
 
       if (key.empty())
@@ -404,6 +418,8 @@ namespace cnerium::server::detail
         return result;
       }
 
+      value = trim_trailing_http_whitespace(value);
+
       result.ok = true;
       result.original_key = std::string(key);
       result.key = std::string(key);
@@ -414,23 +430,27 @@ namespace cnerium::server::detail
     /**
      * @brief Parse a Content-Length header value.
      *
+     * Accepts a decimal non-negative integer after trimming HTTP whitespace.
+     *
      * @param value Header value
      * @return std::optional<std::size_t> Parsed value if valid
      */
     [[nodiscard]] static std::optional<std::size_t> parse_content_length(
         std::string_view value)
     {
-      std::size_t parsed = 0;
+      value = trim(value);
+      value = trim_trailing_http_whitespace(value);
 
       if (value.empty())
       {
         return std::nullopt;
       }
 
+      std::size_t parsed = 0;
       const char *begin = value.data();
       const char *end = value.data() + value.size();
 
-      auto [ptr, ec] = std::from_chars(begin, end, parsed);
+      const auto [ptr, ec] = std::from_chars(begin, end, parsed);
       if (ec != std::errc{} || ptr != end)
       {
         return std::nullopt;
@@ -481,25 +501,44 @@ namespace cnerium::server::detail
     }
 
     /**
-     * @brief Normalize a request target into a request path.
-     *
-     * Rules:
-     *   - empty target becomes "/"
-     *   - origin-form is preserved
-     *   - missing leading slash is fixed
+     * @brief Split a request target into path and query components.
      *
      * @param target Raw request target
+     * @return std::pair<std::string_view, std::string_view> Path and query
+     */
+    [[nodiscard]] static std::pair<std::string_view, std::string_view> split_target(
+        std::string_view target) noexcept
+    {
+      const auto question = target.find('?');
+      if (question == std::string_view::npos)
+      {
+        return {target, std::string_view{}};
+      }
+
+      return {
+          target.substr(0, question),
+          target.substr(question + 1)};
+    }
+
+    /**
+     * @brief Normalize a request path.
+     *
+     * Rules:
+     *   - empty path becomes "/"
+     *   - missing leading slash is fixed
+     *
+     * @param path Raw request path
      * @return std::string Normalized path
      */
-    [[nodiscard]] static std::string normalize_target(
-        std::string_view target)
+    [[nodiscard]] static std::string normalize_path(
+        std::string_view path)
     {
-      if (target.empty())
+      if (path.empty())
       {
         return "/";
       }
 
-      std::string out(target);
+      std::string out(path);
 
       if (out.front() != '/')
       {
@@ -523,6 +562,27 @@ namespace cnerium::server::detail
       }
 
       while (!value.empty() && is_space(value.back()))
+      {
+        value.remove_suffix(1);
+      }
+
+      return value;
+    }
+
+    /**
+     * @brief Trim trailing HTTP whitespace from a string view.
+     *
+     * @param value Input view
+     * @return std::string_view Trimmed view
+     */
+    [[nodiscard]] static std::string_view trim_trailing_http_whitespace(
+        std::string_view value) noexcept
+    {
+      while (!value.empty() &&
+             (value.back() == ' ' ||
+              value.back() == '\t' ||
+              value.back() == '\r' ||
+              value.back() == '\n'))
       {
         value.remove_suffix(1);
       }
@@ -613,7 +673,11 @@ namespace cnerium::server::detail
     [[nodiscard]] static char ascii_lower(char ch) noexcept
     {
       const unsigned char c = static_cast<unsigned char>(ch);
-      return static_cast<char>(std::tolower(c));
+      if (c >= 'A' && c <= 'Z')
+      {
+        return static_cast<char>(c - 'A' + 'a');
+      }
+      return static_cast<char>(c);
     }
   };
 

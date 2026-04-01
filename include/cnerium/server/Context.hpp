@@ -2,7 +2,7 @@
  * @file Context.hpp
  * @brief cnerium::server — Server request execution context
  *
- * @version 0.1.0
+ * @version 0.2.0
  * @author Gaspard Kirira
  * @copyright (c) 2026 Gaspard Kirira
  * @license MIT
@@ -21,35 +21,38 @@
  *   - Hold response state to be sent back to the client
  *   - Expose matched route parameters
  *   - Provide a bridge to the middleware execution context
+ *   - Provide ergonomic helpers for request and response handling
  *
  * Design goals:
  *   - Simple and explicit ownership model
  *   - One context per request lifecycle
  *   - Easy integration with router and middleware
  *   - Lightweight and extensible for future metadata
+ *   - Developer-friendly API (minimal boilerplate)
  *
  * Notes:
  *   - Context owns its Request, Response, and Params objects
  *   - Route parameters are typically filled after router matching
  *   - Middleware integration is provided through middleware_context()
+ *   - This class is designed for high-level handler ergonomics
  *
  * Usage:
  * @code
  *   using namespace cnerium::server;
- *   using namespace cnerium::http;
  *
  *   Context ctx;
- *   ctx.request().set_method(Method::Get);
- *   ctx.request().set_path("/users/42");
- *   ctx.params().set("id", "42");
  *
- *   auto id = ctx.params().get("id");
- *   ctx.response().text("User id: " + std::string(id));
+ *   ctx.text("Hello world");
+ *
+ *   auto id = ctx.param("id");
+ *   auto token = ctx.header("Authorization");
  * @endcode
  */
 
 #pragma once
 
+#include <string>
+#include <string_view>
 #include <utility>
 
 #include <cnerium/http/Request.hpp>
@@ -105,130 +108,198 @@ namespace cnerium::server
     {
     }
 
+    // ============================================================
+    // 🔵 CORE ACCESS
+    // ============================================================
+
+    [[nodiscard]] request_type &request() noexcept { return request_; }
+    [[nodiscard]] const request_type &request() const noexcept { return request_; }
+
+    [[nodiscard]] response_type &response() noexcept { return response_; }
+    [[nodiscard]] const response_type &response() const noexcept { return response_; }
+
+    [[nodiscard]] params_type &params() noexcept { return params_; }
+    [[nodiscard]] const params_type &params() const noexcept { return params_; }
+
+    // ============================================================
+    // 🔥 REQUEST SHORTCUTS (DEV UX)
+    // ============================================================
+
     /**
-     * @brief Returns mutable access to the HTTP request.
-     *
-     * @return request_type& Current request
+     * @brief Returns the HTTP method.
      */
-    [[nodiscard]] request_type &request() noexcept
+    [[nodiscard]] cnerium::http::Method method() const noexcept
     {
-      return request_;
+      return request_.method();
     }
 
     /**
-     * @brief Returns const access to the HTTP request.
-     *
-     * @return const request_type& Current request
+     * @brief Returns the request path.
      */
-    [[nodiscard]] const request_type &request() const noexcept
+    [[nodiscard]] std::string_view path() const noexcept
     {
-      return request_;
+      return request_.path();
     }
 
     /**
-     * @brief Returns mutable access to the HTTP response.
-     *
-     * @return response_type& Current response
+     * @brief Returns the raw query string.
      */
-    [[nodiscard]] response_type &response() noexcept
+    [[nodiscard]] std::string_view query() const noexcept
     {
-      return response_;
+      return request_.query();
     }
 
     /**
-     * @brief Returns const access to the HTTP response.
-     *
-     * @return const response_type& Current response
+     * @brief Returns a header value.
      */
-    [[nodiscard]] const response_type &response() const noexcept
+    [[nodiscard]] std::string_view header(std::string_view key) const noexcept
     {
-      return response_;
+      return request_.header(key);
     }
 
     /**
-     * @brief Returns mutable access to the matched route parameters.
-     *
-     * @return params_type& Route parameters
+     * @brief Returns a route parameter.
      */
-    [[nodiscard]] params_type &params() noexcept
+    [[nodiscard]] std::string_view param(std::string_view key) const noexcept
     {
-      return params_;
+      return params_.get(key);
     }
 
     /**
-     * @brief Returns const access to the matched route parameters.
-     *
-     * @return const params_type& Route parameters
+     * @brief Returns true if a route parameter exists.
      */
-    [[nodiscard]] const params_type &params() const noexcept
+    [[nodiscard]] bool has_param(std::string_view key) const noexcept
     {
-      return params_;
+      return params_.contains(key);
     }
 
     /**
-     * @brief Replace the full request object.
-     *
-     * @param request New request
+     * @brief Returns the raw request body.
      */
-    void set_request(request_type request)
+    [[nodiscard]] std::string_view body() const noexcept
     {
-      request_ = std::move(request);
+      return request_.body();
     }
 
     /**
-     * @brief Replace the full response object.
-     *
-     * @param response New response
+     * @brief Parse request body as JSON.
      */
-    void set_response(response_type response)
+    [[nodiscard]] cnerium::json::value json() const
     {
-      response_ = std::move(response);
+      return request_.json();
     }
 
     /**
-     * @brief Replace the full route parameters object.
-     *
-     * @param params New route parameters
+     * @brief Set HTTP status.
      */
-    void set_params(params_type params)
+    Context &status(cnerium::http::Status status)
     {
-      params_ = std::move(params);
+      response_.set_status(status);
+      return *this;
     }
 
     /**
-     * @brief Returns true if route parameters are present.
-     *
-     * @return true if params are not empty
+     * @brief Send plain text response.
      */
-    [[nodiscard]] bool has_params() const noexcept
+    Context &text(std::string body)
     {
-      return !params_.empty();
+      response_.text(std::move(body));
+      return *this;
+    }
+
+    /**
+     * @brief Send HTML response.
+     */
+    Context &html(std::string body)
+    {
+      response_.html(std::move(body));
+      return *this;
+    }
+
+    /**
+     * @brief Send JSON response.
+     */
+    Context &json(const cnerium::json::value &value)
+    {
+      response_.json(value);
+      return *this;
+    }
+
+    /**
+     * @brief Send JSON response (rvalue).
+     */
+    Context &json(cnerium::json::value &&value)
+    {
+      response_.json(std::move(value));
+      return *this;
+    }
+
+    /**
+     * @brief Send success JSON response.
+     */
+    Context &ok(std::string message = "ok")
+    {
+      response_.ok(std::move(message));
+      return *this;
+    }
+
+    /**
+     * @brief Send error JSON response.
+     */
+    Context &error(cnerium::http::Status status, std::string message)
+    {
+      response_.error(status, std::move(message));
+      return *this;
+    }
+
+    /**
+     * @brief Set response header.
+     */
+    Context &set_header(std::string key, std::string value)
+    {
+      response_.set_header(std::move(key), std::move(value));
+      return *this;
+    }
+
+    /**
+     * @brief Set Content-Type header.
+     */
+    Context &content_type(std::string value)
+    {
+      response_.content_type(std::move(value));
+      return *this;
     }
 
     /**
      * @brief Build a middleware execution context view.
-     *
-     * This creates a non-owning middleware::Context referencing
-     * this context's request and response objects.
-     *
-     * @return middleware_context_type Middleware-compatible context
      */
     [[nodiscard]] middleware_context_type middleware_context() noexcept
     {
       return middleware_context_type(request_, response_);
     }
 
-    /**
-     * @brief Build a const middleware execution context view.
-     *
-     * Since middleware::Context requires mutable references,
-     * this overload is intentionally omitted.
-     */
+    void set_request(request_type request)
+    {
+      request_ = std::move(request);
+    }
+
+    void set_response(response_type response)
+    {
+      response_ = std::move(response);
+    }
+
+    void set_params(params_type params)
+    {
+      params_ = std::move(params);
+    }
+
+    [[nodiscard]] bool has_params() const noexcept
+    {
+      return !params_.empty();
+    }
 
     /**
      * @brief Reset the context to an empty default state.
-     *
-     * Clears request, response, and route parameters.
      */
     void clear()
     {

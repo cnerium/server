@@ -2,7 +2,7 @@
  * @file ResponseWriter.hpp
  * @brief cnerium::server::detail — Raw HTTP response writer
  *
- * @version 0.1.0
+ * @version 0.2.0
  * @author Gaspard Kirira
  * @copyright (c) 2026 Gaspard Kirira
  * @license MIT
@@ -34,6 +34,7 @@
  *   - Connection management headers are left to higher layers
  *   - If Content-Length is not already present, it is added automatically
  *   - Existing headers are preserved as-is
+ *   - HEAD-specific body stripping should be decided by higher layers if needed
  *
  * Usage:
  * @code
@@ -81,7 +82,7 @@ namespace cnerium::server::detail
       write_headers(out, response);
       write_content_length_if_missing(out, response);
       out += "\r\n";
-      out.append(response.body().data(), response.body().size());
+      write_body(out, response);
 
       return out;
     }
@@ -93,8 +94,9 @@ namespace cnerium::server::detail
      * @param out Output buffer
      * @param response Response being serialized
      */
-    static void reserve_output(std::string &out,
-                               const cnerium::http::Response &response)
+    static void reserve_output(
+        std::string &out,
+        const cnerium::http::Response &response)
     {
       out.reserve(128 + response.body().size());
     }
@@ -108,8 +110,9 @@ namespace cnerium::server::detail
      * @param out Output buffer
      * @param response Response being serialized
      */
-    static void write_status_line(std::string &out,
-                                  const cnerium::http::Response &response)
+    static void write_status_line(
+        std::string &out,
+        const cnerium::http::Response &response)
     {
       out += "HTTP/1.1 ";
       append_int(out, cnerium::http::to_int(response.status()));
@@ -126,8 +129,9 @@ namespace cnerium::server::detail
      * @param out Output buffer
      * @param response Response being serialized
      */
-    static void write_headers(std::string &out,
-                              const cnerium::http::Response &response)
+    static void write_headers(
+        std::string &out,
+        const cnerium::http::Response &response)
     {
       for (const auto &header : response.headers())
       {
@@ -148,7 +152,7 @@ namespace cnerium::server::detail
         std::string &out,
         const cnerium::http::Response &response)
     {
-      if (response.has_header("Content-Length"))
+      if (has_header_ci(response, "Content-Length"))
       {
         return;
       }
@@ -156,6 +160,43 @@ namespace cnerium::server::detail
       out += "Content-Length: ";
       append_size(out, response.body().size());
       out += "\r\n";
+    }
+
+    /**
+     * @brief Write the response body bytes.
+     *
+     * @param out Output buffer
+     * @param response Response being serialized
+     */
+    static void write_body(
+        std::string &out,
+        const cnerium::http::Response &response)
+    {
+      out.append(response.body().data(), response.body().size());
+    }
+
+    /**
+     * @brief Return true if the response already contains a given header.
+     *
+     * Comparison is case-insensitive for robustness.
+     *
+     * @param response Response being inspected
+     * @param key Header name to search
+     * @return true if the header exists
+     */
+    [[nodiscard]] static bool has_header_ci(
+        const cnerium::http::Response &response,
+        std::string_view key) noexcept
+    {
+      for (const auto &header : response.headers())
+      {
+        if (iequals(header.first, key))
+        {
+          return true;
+        }
+      }
+
+      return false;
     }
 
     /**
@@ -188,6 +229,49 @@ namespace cnerium::server::detail
       {
         out.append(buffer, ptr);
       }
+    }
+
+    /**
+     * @brief Compare two ASCII strings case-insensitively.
+     *
+     * @param a First string
+     * @param b Second string
+     * @return true if equal ignoring ASCII case
+     */
+    [[nodiscard]] static bool iequals(
+        std::string_view a,
+        std::string_view b) noexcept
+    {
+      if (a.size() != b.size())
+      {
+        return false;
+      }
+
+      for (std::size_t i = 0; i < a.size(); ++i)
+      {
+        if (ascii_lower(a[i]) != ascii_lower(b[i]))
+        {
+          return false;
+        }
+      }
+
+      return true;
+    }
+
+    /**
+     * @brief Convert one ASCII character to lowercase.
+     *
+     * @param ch Input character
+     * @return char Lowercased character
+     */
+    [[nodiscard]] static char ascii_lower(char ch) noexcept
+    {
+      const unsigned char c = static_cast<unsigned char>(ch);
+      if (c >= 'A' && c <= 'Z')
+      {
+        return static_cast<char>(c - 'A' + 'a');
+      }
+      return static_cast<char>(c);
     }
   };
 

@@ -2,7 +2,7 @@
  * @file Socket.hpp
  * @brief cnerium::server::net — TCP socket wrapper
  *
- * @version 0.1.0
+ * @version 0.2.0
  * @author Gaspard Kirira
  * @copyright (c) 2026 Gaspard Kirira
  * @license MIT
@@ -17,30 +17,30 @@
  *   - provide basic read/write operations
  *   - provide common socket option helpers
  *   - expose explicit validity and lifecycle control
+ *   - provide timeout helpers for read and write operations
  *
  * Design goals:
  *   - Lightweight
  *   - RAII-safe
  *   - Move-only
  *   - Minimal abstraction over POSIX sockets
+ *   - Clear low-level networking API for higher server layers
  *
  * Notes:
  *   - This implementation targets POSIX platforms
  *   - Windows support can be added later through a dedicated backend
  *   - This class does not perform HTTP parsing
  *   - Higher-level connection management belongs to TcpConnection
+ *   - Keep-alive HTTP semantics are handled above this class
  *
  * Usage:
  * @code
  *   using namespace cnerium::server::net;
  *
- *   Socket sock(::socket(AF_INET, SOCK_STREAM, 0));
- *   if (!sock.valid())
- *   {
- *     // handle error
- *   }
- *
+ *   Socket sock = Socket::create_tcp();
  *   sock.set_reuse_addr(true);
+ *   sock.set_read_timeout_ms(5000);
+ *   sock.set_write_timeout_ms(5000);
  * @endcode
  */
 
@@ -55,10 +55,15 @@
 #include <string_view>
 #include <utility>
 
-#include <sys/socket.h>
-#include <unistd.h>
-#include <netinet/in.h>
 #include <arpa/inet.h>
+#include <netinet/in.h>
+#include <sys/socket.h>
+#include <sys/time.h>
+#include <unistd.h>
+
+#ifdef TCP_NODELAY
+#include <netinet/tcp.h>
+#endif
 
 namespace cnerium::server::net
 {
@@ -247,6 +252,7 @@ namespace cnerium::server::net
     void shutdown(int how = SHUT_RDWR)
     {
       ensure_valid("shutdown");
+
       if (::shutdown(fd_, how) < 0)
       {
         throw SocketError("failed to shutdown socket: " + last_error_string());
@@ -452,6 +458,45 @@ namespace cnerium::server::net
     }
 
     /**
+     * @brief Set SO_KEEPALIVE.
+     *
+     * This is the kernel TCP keepalive mechanism, not HTTP keep-alive.
+     *
+     * @param enabled Whether to enable the option
+     * @throws SocketError if setsockopt fails
+     */
+    void set_keep_alive(bool enabled)
+    {
+      set_bool_option(SOL_SOCKET, SO_KEEPALIVE, enabled, "SO_KEEPALIVE");
+    }
+
+    /**
+     * @brief Set the receive timeout in milliseconds.
+     *
+     * Applies a socket-level timeout for blocking receive operations.
+     *
+     * @param timeout_ms Timeout in milliseconds
+     * @throws SocketError if setsockopt fails
+     */
+    void set_read_timeout_ms(std::uint32_t timeout_ms)
+    {
+      set_timeval_option(SOL_SOCKET, SO_RCVTIMEO, timeout_ms, "SO_RCVTIMEO");
+    }
+
+    /**
+     * @brief Set the send timeout in milliseconds.
+     *
+     * Applies a socket-level timeout for blocking send operations.
+     *
+     * @param timeout_ms Timeout in milliseconds
+     * @throws SocketError if setsockopt fails
+     */
+    void set_write_timeout_ms(std::uint32_t timeout_ms)
+    {
+      set_timeval_option(SOL_SOCKET, SO_SNDTIMEO, timeout_ms, "SO_SNDTIMEO");
+    }
+
+    /**
      * @brief Set blocking mode.
      *
      * Currently kept as a future extension point.
@@ -501,10 +546,11 @@ namespace cnerium::server::net
      * @param option_name Human-readable option name
      * @throws SocketError if setsockopt fails
      */
-    void set_bool_option(int level,
-                         int option,
-                         bool enabled,
-                         std::string_view option_name)
+    void set_bool_option(
+        int level,
+        int option,
+        bool enabled,
+        std::string_view option_name)
     {
       ensure_valid("setsockopt");
 
@@ -514,6 +560,38 @@ namespace cnerium::server::net
                        option,
                        &value,
                        static_cast<socklen_t>(sizeof(value))) < 0)
+      {
+        throw SocketError(
+            "failed to set " + std::string(option_name) + ": " + last_error_string());
+      }
+    }
+
+    /**
+     * @brief Set a timeval-based socket option from milliseconds.
+     *
+     * @param level Socket option level
+     * @param option Socket option name
+     * @param timeout_ms Timeout in milliseconds
+     * @param option_name Human-readable option name
+     * @throws SocketError if setsockopt fails
+     */
+    void set_timeval_option(
+        int level,
+        int option,
+        std::uint32_t timeout_ms,
+        std::string_view option_name)
+    {
+      ensure_valid("setsockopt");
+
+      timeval tv{};
+      tv.tv_sec = static_cast<time_t>(timeout_ms / 1000);
+      tv.tv_usec = static_cast<suseconds_t>((timeout_ms % 1000) * 1000);
+
+      if (::setsockopt(fd_,
+                       level,
+                       option,
+                       &tv,
+                       static_cast<socklen_t>(sizeof(tv))) < 0)
       {
         throw SocketError(
             "failed to set " + std::string(option_name) + ": " + last_error_string());

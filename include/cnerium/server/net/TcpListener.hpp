@@ -2,7 +2,7 @@
  * @file TcpListener.hpp
  * @brief cnerium::server::net — TCP listener
  *
- * @version 0.1.0
+ * @version 0.2.0
  * @author Gaspard Kirira
  * @copyright (c) 2026 Gaspard Kirira
  * @license MIT
@@ -25,12 +25,14 @@
  *   - Move-only
  *   - Thin listener abstraction
  *   - No HTTP parsing logic in this class
+ *   - Clear separation between accept loop and connection processing
  *
  * Notes:
  *   - This class currently provides a blocking accept loop
  *   - Connection processing is synchronous by default
- *   - Concurrency and runtime integration can be added later
  *   - Accepted connections are delegated to TcpConnection
+ *   - HTTP keep-alive is handled inside TcpConnection, not in this class
+ *   - Listener socket options are applied at startup before bind/listen
  *
  * Usage:
  * @code
@@ -53,7 +55,6 @@
 
 #include <atomic>
 #include <cstdint>
-#include <string_view>
 #include <utility>
 
 #include <cnerium/server/Server.hpp>
@@ -231,8 +232,13 @@ namespace cnerium::server::net
     /**
      * @brief Start the listener using the effective configuration.
      *
-     * Creates the listening socket, applies options, binds,
+     * Creates the listening socket, applies socket options, binds,
      * and starts listening.
+     *
+     * Applied options:
+     *   - SO_REUSEADDR
+     *   - SO_REUSEPORT when available
+     *   - TCP_NODELAY when available
      *
      * @throws SocketError if startup fails
      */
@@ -246,8 +252,7 @@ namespace cnerium::server::net
       }
 
       socket_ = socket_type::create_tcp();
-      socket_.set_reuse_addr(true);
-      socket_.set_reuse_port(true);
+      apply_listener_socket_options(socket_);
 
       const auto &cfg = config();
       socket_.bind(cfg.host, cfg.port);
@@ -274,13 +279,19 @@ namespace cnerium::server::net
     [[nodiscard]] connection_type accept()
     {
       ensure_running();
-      return connection_type(socket_.accept(), *server_);
+
+      auto client = socket_.accept();
+      apply_client_socket_options(client);
+
+      return connection_type(std::move(client), *server_);
     }
 
     /**
      * @brief Process one accepted connection.
      *
-     * Accepts a client and processes exactly one request/response cycle.
+     * Accepts a client and processes the connection through TcpConnection.
+     * The connection itself may handle multiple HTTP requests if keep-alive
+     * is enabled at the HTTP layer.
      *
      * @throws SocketError if accept or connection processing fails
      */
@@ -342,6 +353,33 @@ namespace cnerium::server::net
       {
         throw SocketError("TCP listener is not running");
       }
+    }
+
+    /**
+     * @brief Apply options to the listening socket before bind/listen.
+     *
+     * @param sock Listening socket
+     * @throws SocketError if a socket option fails
+     */
+    static void apply_listener_socket_options(socket_type &sock)
+    {
+      sock.set_reuse_addr(true);
+      sock.set_reuse_port(true);
+      sock.set_tcp_no_delay(true);
+    }
+
+    /**
+     * @brief Apply options to a newly accepted client socket.
+     *
+     * These options affect connection behavior after accept.
+     *
+     * @param sock Accepted client socket
+     * @throws SocketError if a socket option fails
+     */
+    static void apply_client_socket_options(socket_type &sock)
+    {
+      sock.set_tcp_no_delay(true);
+      sock.set_keep_alive(true);
     }
   };
 

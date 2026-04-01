@@ -2,7 +2,7 @@
  * @file Config.hpp
  * @brief cnerium::server — Server configuration
  *
- * @version 0.1.0
+ * @version 0.2.0
  * @author Gaspard Kirira
  * @copyright (c) 2026 Gaspard Kirira
  * @license MIT
@@ -15,16 +15,19 @@
  *   - network binding settings (host, port)
  *   - connection backlog size
  *   - buffer sizes for I/O operations
- *   - limits for request body size
+ *   - limits for request body and headers
+ *   - socket timeout configuration
+ *   - keep-alive connection limits
  *
  * Design goals:
  *   - Simple and explicit configuration
  *   - Safe default values for immediate use
- *   - No dynamic allocation
- *   - Easily extensible for future features (TLS, timeouts, etc.)
+ *   - No dynamic allocation beyond std::string
+ *   - Easily extensible for future features (TLS, runtime integration, etc.)
  *
  * Notes:
- *   - This configuration is immutable once the server starts
+ *   - This configuration is intended to be treated as immutable
+ *     once the server starts listening
  *   - Defaults are tuned for development and small deployments
  *   - Advanced tuning can be added without breaking API
  *
@@ -35,6 +38,7 @@
  *   Config config;
  *   config.host = "0.0.0.0";
  *   config.port = 8080;
+ *   config.read_timeout_ms = 5000;
  *
  *   Server server(config);
  *   server.listen();
@@ -103,6 +107,53 @@ namespace cnerium::server
     std::size_t max_request_body_size{1024 * 1024};
 
     /**
+     * @brief Maximum allowed size of the HTTP header block.
+     *
+     * This includes the request line and all header lines up to
+     * the terminating CRLF CRLF sequence.
+     *
+     * Default: 16 KB
+     */
+    std::size_t max_header_size{16 * 1024};
+
+    /**
+     * @brief Maximum number of HTTP requests processed on one keep-alive connection.
+     *
+     * Helps prevent unbounded reuse of a single client connection.
+     *
+     * Default: 100
+     */
+    std::size_t max_requests_per_connection{100};
+
+    /**
+     * @brief Socket read timeout in milliseconds.
+     *
+     * Applied to blocking receive operations on accepted client sockets.
+     *
+     * Default: 5000 ms
+     */
+    std::uint32_t read_timeout_ms{5000};
+
+    /**
+     * @brief Socket write timeout in milliseconds.
+     *
+     * Applied to blocking send operations on accepted client sockets.
+     *
+     * Default: 5000 ms
+     */
+    std::uint32_t write_timeout_ms{5000};
+
+    /**
+     * @brief Idle keep-alive timeout in milliseconds.
+     *
+     * Used by higher connection layers to decide how long a persistent
+     * connection may remain open while waiting for the next request.
+     *
+     * Default: 10000 ms
+     */
+    std::uint32_t keep_alive_timeout_ms{10000};
+
+    /**
      * @brief Returns true if the configuration is valid.
      *
      * Performs basic validation checks.
@@ -111,7 +162,16 @@ namespace cnerium::server
      */
     [[nodiscard]] bool valid() const noexcept
     {
-      return !host.empty() && port > 0 && backlog > 0 && read_buffer_size > 0 && max_request_body_size > 0;
+      return !host.empty() &&
+             port > 0 &&
+             backlog > 0 &&
+             read_buffer_size > 0 &&
+             max_request_body_size > 0 &&
+             max_header_size > 0 &&
+             max_requests_per_connection > 0 &&
+             read_timeout_ms > 0 &&
+             write_timeout_ms > 0 &&
+             keep_alive_timeout_ms > 0;
     }
 
     /**
@@ -124,6 +184,11 @@ namespace cnerium::server
       backlog = 128;
       read_buffer_size = 8 * 1024;
       max_request_body_size = 1024 * 1024;
+      max_header_size = 16 * 1024;
+      max_requests_per_connection = 100;
+      read_timeout_ms = 5000;
+      write_timeout_ms = 5000;
+      keep_alive_timeout_ms = 10000;
     }
   };
 

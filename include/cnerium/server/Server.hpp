@@ -2,7 +2,7 @@
  * @file Server.hpp
  * @brief cnerium::server — Main HTTP server core
  *
- * @version 0.1.0
+ * @version 0.2.0
  * @author Gaspard Kirira
  * @copyright (c) 2026 Gaspard Kirira
  * @license MIT
@@ -36,6 +36,7 @@
  *   - Deterministic and synchronous execution
  *   - Clear separation between routing and transport
  *   - Easy extension for runtime integration
+ *   - Developer-friendly route registration API
  *
  * Notes:
  *   - Routes are evaluated in insertion order
@@ -44,6 +45,7 @@
  *   - If no route matches, the not_found handler is called
  *   - If an exception is thrown, the error handler is called
  *   - Network I/O is delegated to cnerium::server::net::TcpListener
+ *   - HTTP keep-alive is handled at the connection layer, not in this class
  *
  * Usage:
  * @code
@@ -53,13 +55,13 @@
  *
  *   server.use([](cnerium::middleware::Context &ctx, cnerium::middleware::Next next)
  *   {
- *     ctx.response().set_header("X-Powered-By", "Cnerium");
+ *     ctx.response().set_header("X-Powered-By", "cnerium");
  *     next();
  *   });
  *
  *   server.get("/", [](Context &ctx)
  *   {
- *     ctx.response().text("Hello, world!");
+ *     ctx.text("Hello, world!");
  *   });
  *
  *   server.listen();
@@ -70,6 +72,7 @@
 
 #include <cstddef>
 #include <memory>
+#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -334,9 +337,10 @@ namespace cnerium::server
      * @param handler Route handler
      * @return RouteEntry& Stored route entry
      */
-    route_entry_type &add(method_type method,
-                          std::string pattern,
-                          handler_type handler)
+    route_entry_type &add(
+        method_type method,
+        std::string pattern,
+        handler_type handler)
     {
       routes_.emplace_back(
           cnerium::router::Route(method, std::move(pattern)),
@@ -358,6 +362,10 @@ namespace cnerium::server
 
     /**
      * @brief Register a GET route.
+     *
+     * @param pattern Route pattern
+     * @param handler Route handler
+     * @return RouteEntry& Stored route entry
      */
     route_entry_type &get(std::string pattern, handler_type handler)
     {
@@ -366,6 +374,10 @@ namespace cnerium::server
 
     /**
      * @brief Register a POST route.
+     *
+     * @param pattern Route pattern
+     * @param handler Route handler
+     * @return RouteEntry& Stored route entry
      */
     route_entry_type &post(std::string pattern, handler_type handler)
     {
@@ -374,6 +386,10 @@ namespace cnerium::server
 
     /**
      * @brief Register a PUT route.
+     *
+     * @param pattern Route pattern
+     * @param handler Route handler
+     * @return RouteEntry& Stored route entry
      */
     route_entry_type &put(std::string pattern, handler_type handler)
     {
@@ -382,6 +398,10 @@ namespace cnerium::server
 
     /**
      * @brief Register a PATCH route.
+     *
+     * @param pattern Route pattern
+     * @param handler Route handler
+     * @return RouteEntry& Stored route entry
      */
     route_entry_type &patch(std::string pattern, handler_type handler)
     {
@@ -390,6 +410,10 @@ namespace cnerium::server
 
     /**
      * @brief Register a DELETE route.
+     *
+     * @param pattern Route pattern
+     * @param handler Route handler
+     * @return RouteEntry& Stored route entry
      */
     route_entry_type &del(std::string pattern, handler_type handler)
     {
@@ -398,6 +422,10 @@ namespace cnerium::server
 
     /**
      * @brief Register a HEAD route.
+     *
+     * @param pattern Route pattern
+     * @param handler Route handler
+     * @return RouteEntry& Stored route entry
      */
     route_entry_type &head(std::string pattern, handler_type handler)
     {
@@ -406,10 +434,38 @@ namespace cnerium::server
 
     /**
      * @brief Register an OPTIONS route.
+     *
+     * @param pattern Route pattern
+     * @param handler Route handler
+     * @return RouteEntry& Stored route entry
      */
     route_entry_type &options(std::string pattern, handler_type handler)
     {
       return add(method_type::Options, std::move(pattern), std::move(handler));
+    }
+
+    /**
+     * @brief Register a TRACE route.
+     *
+     * @param pattern Route pattern
+     * @param handler Route handler
+     * @return RouteEntry& Stored route entry
+     */
+    route_entry_type &trace(std::string pattern, handler_type handler)
+    {
+      return add(method_type::Trace, std::move(pattern), std::move(handler));
+    }
+
+    /**
+     * @brief Register a CONNECT route.
+     *
+     * @param pattern Route pattern
+     * @param handler Route handler
+     * @return RouteEntry& Stored route entry
+     */
+    route_entry_type &connect(std::string pattern, handler_type handler)
+    {
+      return add(method_type::Connect, std::move(pattern), std::move(handler));
     }
 
     /**
@@ -451,8 +507,9 @@ namespace cnerium::server
      * @param path Incoming request path
      * @return true if a route matches
      */
-    [[nodiscard]] bool matches(method_type method,
-                               std::string_view path) const
+    [[nodiscard]] bool matches(
+        method_type method,
+        std::string_view path) const
     {
       return cnerium::server::detail::find_route(routes_, method, path).found();
     }
@@ -666,16 +723,25 @@ namespace cnerium::server
 
 } // namespace cnerium::server
 
-#include <stdexcept>
 #include <cnerium/server/net/TcpListener.hpp>
 
 namespace cnerium::server
 {
+  /**
+   * @brief Destroy the server and stop the listener if active.
+   */
   inline Server::~Server()
   {
     stop();
   }
 
+  /**
+   * @brief Start the TCP listener.
+   *
+   * Creates a new listener bound to this server instance and starts it.
+   *
+   * @throws std::logic_error if the server is already listening
+   */
   inline void Server::start()
   {
     if (listening())
@@ -687,6 +753,11 @@ namespace cnerium::server
     listener_->start();
   }
 
+  /**
+   * @brief Run the blocking accept loop.
+   *
+   * Starts the listener first if it is not already active.
+   */
   inline void Server::run()
   {
     if (!listening())
@@ -697,6 +768,11 @@ namespace cnerium::server
     listener_->run();
   }
 
+  /**
+   * @brief Accept and process exactly one connection.
+   *
+   * Starts the listener first if it is not already active.
+   */
   inline void Server::run_once()
   {
     if (!listening())
@@ -707,6 +783,9 @@ namespace cnerium::server
     listener_->run_once();
   }
 
+  /**
+   * @brief Stop the listener and release its resources.
+   */
   inline void Server::stop() noexcept
   {
     if (listener_)
@@ -716,6 +795,11 @@ namespace cnerium::server
     }
   }
 
+  /**
+   * @brief Return true if the listener exists and is running.
+   *
+   * @return true if listening
+   */
   inline bool Server::listening() const noexcept
   {
     return listener_ && listener_->running();

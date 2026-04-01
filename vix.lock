@@ -9,12 +9,12 @@
       "version": "0.1.0"
     },
     {
-      "commit": "af235330530d298e86018a77726d130d781f2dd5",
-      "hash": "7aac47f5f78d6120284a3e659de6e954ffafb4ad64bc30e1b8214e3ddc46373c",
+      "commit": "f79690370dc88678386d79705280941ef02f69c5",
+      "hash": "7a6739d848a712918679673420335ea74762a2bc161a193a2fb37e1f74cd2a13",
       "id": "cnerium/http",
       "repo": "https://github.com/cnerium/http",
-      "tag": "v0.2.0",
-      "version": "0.2.0"
+      "tag": "v0.3.0",
+      "version": "0.3.0"
     },
     {
       "commit": "7d953a819951563efd9ecaf16c7d0b8f0125563f",
@@ -25,12 +25,12 @@
       "version": "0.2.0"
     },
     {
-      "commit": "614c3c294ec84954129a8cd3f8df46c127667dd8",
-      "hash": "a7f8a5c3c7c4f8be749efd7f7c3f135d1ab676a42596dfb85a098f21b0277c92",
+      "commit": "552f7d78b91170daa5fbffced43c39a019aca1d1",
+      "hash": "ad608d19fa88d98e5890f81055be2c6e72442420e3b9a6fc935dbb94438b1cf2",
       "id": "cnerium/router",
       "repo": "https://github.com/cnerium/router",
-      "tag": "v0.1.0",
-      "version": "0.1.0"
+      "tag": "v0.2.0",
+      "version": "0.2.0"
     }
   ],
   "lockVersion": 1
